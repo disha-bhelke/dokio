@@ -1,0 +1,124 @@
+.pdf-layout {
+  width: 100vw;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-color);
+}
+
+.pdf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  background-color: var(--card-bg);
+  border-bottom: 0.1vh solid var(--border-color);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+}
+
+.generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--primary-color);
+  color: white;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.generate-btn:disabled {
+  background-color: var(--muted-ink);
+  cursor: not-allowed;
+}
+
+.pdf-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.pdf-instruction {
+  color: var(--muted-text);
+  margin-bottom: 14px;
+  font-size: 1.1rem;
+}
+
+.pdf-list-container {
+  background-color: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sortable-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 10px;
+  border-bottom: 0.1vh solid var(--border-color);
+  gap: 12px;
+  background-color: var(--card-bg);
+  transition: background-color 0.2s;
+}
+
+.sortable-item:last-child {
+  border-bottom: none;
+}
+
+.sortable-item.selected {
+  background-color: var(--bg-color);
+}
+
+.drag-handle {
+  cursor: grab;
+  display: flex;
+  align-items: center;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.select-box {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.pdf-doc-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.pdf-doc-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.empty-msg {
+  text-align: center;
+  color: var(--muted-ink);
+  padding: 5vh 0;
+}
+
+@media (max-width: 768px) {
+  .pdf-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .generate-btn { width: 100%; justify-content: center; }
+  .pdf-doc-thumb { width: 48px; height: 48px; }
+}

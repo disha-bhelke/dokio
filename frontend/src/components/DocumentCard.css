@@ -1,0 +1,91 @@
+.document-card {
+  background-color: var(--card-bg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease;
+}
+
+.document-card:hover {
+  transform: translateY(-0.5vh);
+  box-shadow: var(--shadow-md);
+}
+
+.document-image-container {
+  width: 100%;
+  height: clamp(170px, 24vh, 240px);
+  position: relative;
+  background-color: var(--surface-hover);
+  cursor: pointer;
+}
+
+.document-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.document-file-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-text);
+  gap: 1vh;
+}
+
+.document-tags {
+  position: absolute;
+  top: 1vh;
+  right: 1vw;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2vw;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e293b;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.document-info {
+  padding: 14px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.document-name {
+  font-size: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+  cursor: pointer;
+}
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn:hover { color: var(--primary-color); background-color: var(--surface-selected); }
+.delete-btn:hover { color: var(--danger-color); background-color: var(--danger-bg); }
+
+@media (max-width: 768px) {
+  .document-image-container { height: 200px; }
+}
