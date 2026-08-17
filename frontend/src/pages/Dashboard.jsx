@@ -191,8 +191,15 @@ const Dashboard = () => {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const original = canvas.toDataURL('image/jpeg', 0.9);
 
-      applyScanFilter(ctx, canvas.width, canvas.height);
-      const scanned = canvas.toDataURL('image/jpeg', 0.9);
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('blackAndWhite', 'false');
+
+      const response = await api.post('/documents/scan', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const scanned = response.data?.previewDataUrl || original;
 
       return { original, scanned };
     } finally {
@@ -334,10 +341,10 @@ const Dashboard = () => {
   };
 
   const openPickTagModal = (action) => {
-    if (action === 'camera' && !isMobileDevice()) {
-      setIsDesktopCameraBlockedOpen(true);
-      return;
-    }
+    // if (action === 'camera' && !isMobileDevice()) {
+    //   setIsDesktopCameraBlockedOpen(true);
+    //   return;
+    // }
     setPickTagForAction(action);
     setPickedTagId(selectedTag?._id || '');
     setIsPickTagForUploadOpen(true);

@@ -1,5 +1,6 @@
 const Document = require('../models/Document');
 const cloudinary = require('../config/cloudinary');
+const { processScanImage } = require('../services/scanProcessor');
 
 const uploadDocument = async (req, res) => {
   try {
@@ -34,6 +35,32 @@ const uploadDocument = async (req, res) => {
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ message: 'Error uploading document' });
+  }
+};
+
+const scanDocument = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    let corners = null;
+    if (req.body.corners) {
+      corners = JSON.parse(req.body.corners);
+    }
+
+    const blackAndWhite = req.body.blackAndWhite === 'true' || req.body.blackAndWhite === true;
+
+    const result = await processScanImage({
+      imageBuffer: req.file.buffer,
+      corners,
+      blackAndWhite,
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Scan error:', error);
+    res.status(500).json({ message: error.message || 'Error processing document scan' });
   }
 };
 
@@ -88,4 +115,4 @@ const deleteDocument = async (req, res) => {
   }
 };
 
-module.exports = { uploadDocument, getDocuments, updateDocument, deleteDocument };
+module.exports = { uploadDocument, scanDocument, getDocuments, updateDocument, deleteDocument };
