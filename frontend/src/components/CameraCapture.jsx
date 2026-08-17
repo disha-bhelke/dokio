@@ -99,14 +99,13 @@ const getContainMetrics = (
 const clamp = (value, min, max) =>
   Math.min(max, Math.max(min, value));
 
-const CameraCapture = ({ onClose, onCapture }) => {
+const CameraCapture = ({ onClose, onCapture, initialFile = null }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const previewRef = useRef(null);
   const processingRequestRef = useRef(0);
-  const skipNextPreviewEffectRef = useRef(false);
 
-  const [step, setStep] = useState("camera");
+  const [step, setStep] = useState("camera"); // "camera" | "corners" | "preview"
   const [capturedImage, setCapturedImage] = useState(null);
   const [imageSize, setImageSize] = useState(null);
   const [corners, setCorners] = useState(null);
@@ -118,6 +117,40 @@ const CameraCapture = ({ onClose, onCapture }) => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (initialFile) {
+      let active = true;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (!active) return;
+        const dataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          if (!active) return;
+          setCapturedImage(dataUrl);
+          setImageSize({
+            width: img.naturalWidth || img.width,
+            height: img.naturalHeight || img.height,
+          });
+          setStep("corners");
+          setBlackAndWhite(false);
+          setScannedImage(null);
+          setCorners(null);
+          setError("");
+
+          processCapturedImage(dataUrl, {
+            corners: null,
+            blackAndWhite: false,
+          });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(initialFile);
+
+      return () => {
+        active = false;
+      };
+    }
+
     let mounted = true;
 
     const startCamera = async () => {
@@ -154,21 +187,16 @@ const CameraCapture = ({ onClose, onCapture }) => {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [initialFile]);
 
   const processCapturedImage = async (
     imageDataUrl,
     {
       corners: nextCorners = null,
       blackAndWhite: nextBlackAndWhite = false,
-      skipFollowUpEffect = false,
     } = {}
   ) => {
     const requestId = ++processingRequestRef.current;
-
-    if (skipFollowUpEffect) {
-      skipNextPreviewEffectRef.current = true;
-    }
 
     setLoading(true);
     setError("");
@@ -181,19 +209,22 @@ const CameraCapture = ({ onClose, onCapture }) => {
       });
 
       if (requestId !== processingRequestRef.current) {
-        return;
+        return false;
       }
 
-      if (Array.isArray(result.corners)) {
+      if (Array.isArray(result.corners) && !nextCorners) {
         setCorners(result.corners);
       }
 
       if (result.previewDataUrl) {
         setScannedImage(result.previewDataUrl);
+        return true;
       }
+      return false;
     } catch (err) {
       console.error("Scan processing error:", err);
       setError("Could not process document scan.");
+      return false;
     } finally {
       if (requestId === processingRequestRef.current) {
         setLoading(false);
@@ -226,7 +257,7 @@ const CameraCapture = ({ onClose, onCapture }) => {
       width: canvas.width,
       height: canvas.height,
     });
-    setStep("review");
+    setStep("corners");
     setBlackAndWhite(false);
     setScannedImage(null);
     setCorners(null);
@@ -235,34 +266,23 @@ const CameraCapture = ({ onClose, onCapture }) => {
     processCapturedImage(image, {
       corners: null,
       blackAndWhite: false,
-      skipFollowUpEffect: true,
     });
   };
 
-  useEffect(() => {
-    if (step !== "review" || !capturedImage || !corners) {
-      return;
+  const handleConfirmCorners = async () => {
+    if (!capturedImage || !corners || loading) return;
+    const success = await processCapturedImage(capturedImage, {
+      corners,
+      blackAndWhite,
+    });
+
+    if (success) {
+      setStep("preview");
     }
-
-    if (skipNextPreviewEffectRef.current) {
-      skipNextPreviewEffectRef.current = false;
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      processCapturedImage(capturedImage, {
-        corners,
-        blackAndWhite,
-      });
-    }, 180);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [capturedImage, corners, blackAndWhite, step]);
+  };
 
   useEffect(() => {
-    if (step !== "review") {
+    if (step !== "corners") {
       setPreviewLayout(null);
       return;
     }
@@ -310,26 +330,27 @@ const CameraCapture = ({ onClose, onCapture }) => {
       imageSize.height
     );
 
-    const x = event.clientX - rect.left - metrics.offsetX;
-    const y = event.clientY - rect.top - metrics.offsetY;
+    const rawX = event.clientX - rect.left - metrics.offsetX;
+    const rawY = event.clientY - rect.top - metrics.offsetY;
 
-    if (
-      x < 0 ||
-      y < 0 ||
-      x > metrics.displayWidth ||
-      y > metrics.displayHeight
-    ) {
-      return null;
-    }
+    const clampedX = Math.max(0, Math.min(rawX, metrics.displayWidth));
+    const clampedY = Math.max(0, Math.min(rawY, metrics.displayHeight));
 
     return {
-      x: (x / metrics.displayWidth) * imageSize.width,
-      y: (y / metrics.displayHeight) * imageSize.height,
+      x: (clampedX / metrics.displayWidth) * imageSize.width,
+      y: (clampedY / metrics.displayHeight) * imageSize.height,
     };
   };
 
   const startDragging = (event, index) => {
     event.preventDefault();
+    if (event.target && event.target.setPointerCapture) {
+      try {
+        event.target.setPointerCapture(event.pointerId);
+      } catch (err) {
+        // Fallback for environments without SVG pointer capture support
+      }
+    }
     setDraggingIndex(index);
   };
 
@@ -339,6 +360,7 @@ const CameraCapture = ({ onClose, onCapture }) => {
     }
 
     const move = (event) => {
+      event.preventDefault();
       const point = getImageCoordinates(event);
 
       if (!point) return;
@@ -352,20 +374,34 @@ const CameraCapture = ({ onClose, onCapture }) => {
       });
     };
 
-    const stop = () => {
+    const stop = (event) => {
+      if (event && event.target && event.target.releasePointerCapture) {
+        try {
+          event.target.releasePointerCapture(event.pointerId);
+        } catch (err) {
+          // ignore
+        }
+      }
       setDraggingIndex(null);
     };
 
-    window.addEventListener("pointermove", move);
+    window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
 
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
     };
   }, [draggingIndex]);
 
   const retake = () => {
+    if (initialFile) {
+      onClose();
+      return;
+    }
+
     setCapturedImage(null);
     setImageSize(null);
     setCorners(null);
@@ -374,7 +410,6 @@ const CameraCapture = ({ onClose, onCapture }) => {
     setError("");
     setStep("camera");
     setDraggingIndex(null);
-    skipNextPreviewEffectRef.current = false;
     processingRequestRef.current += 1;
 
     navigator.mediaDevices
@@ -399,7 +434,18 @@ const CameraCapture = ({ onClose, onCapture }) => {
       });
   };
 
-  const saveDocument = async () => {
+  const saveOriginal = async () => {
+    if (!capturedImage) return;
+
+    const file = await dataUrlToFile(
+      capturedImage,
+      initialFile?.name || "original-document.jpg"
+    );
+
+    onCapture(file);
+  };
+
+  const saveScanned = async () => {
     if (!scannedImage) return;
 
     const file = await dataUrlToFile(
@@ -412,8 +458,10 @@ const CameraCapture = ({ onClose, onCapture }) => {
 
   const previewWidth = imageSize?.width || 0;
   const previewHeight = imageSize?.height || 0;
-  const handleRadius =
-    Math.max(previewWidth, previewHeight) * 0.018;
+  const handleRadius = Math.max(
+    Math.max(previewWidth, previewHeight) * 0.024,
+    18
+  );
 
   const insetHandlePoint = (point) => {
     if (!imageSize) return point;
@@ -450,12 +498,12 @@ const CameraCapture = ({ onClose, onCapture }) => {
         </div>
       )}
 
-      {step === "review" && (
+      {step === "corners" && (
         <div className="review-screen">
           <div className="review-header">
-            <h2>Adjust and scan</h2>
+            <h2>Adjust Corners</h2>
             <p>
-              Drag the four corners to fit the document, then choose color or black and white before saving.
+              Drag the four green corners to fit your document boundaries.
             </p>
           </div>
 
@@ -515,19 +563,49 @@ const CameraCapture = ({ onClose, onCapture }) => {
 
           {error && <div className="camera-error">{error}</div>}
 
+          <div className="review-actions">
+            <button type="button" className="secondary-button" onClick={retake}>
+              {initialFile ? "Cancel" : "Retake"}
+            </button>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleConfirmCorners}
+              disabled={!corners || loading}
+            >
+              {loading ? "Generating Preview..." : "Confirm Corners"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === "preview" && (
+        <div className="review-screen">
+          <div className="review-header">
+            <h2>Document Preview</h2>
+            <p>
+              Choose color or black &amp; white mode, then save your document.
+            </p>
+          </div>
+
           {scannedImage && (
             <div className="scanned-preview">
-              <h3>Preview</h3>
               <img src={scannedImage} alt="Scanned document" />
             </div>
           )}
+
+          {error && <div className="camera-error">{error}</div>}
 
           <div className="review-actions">
             <div className="scan-mode-toggle">
               <button
                 type="button"
                 className={`scan-mode-button ${!blackAndWhite ? "active" : ""}`}
-                onClick={() => setBlackAndWhite(false)}
+                onClick={() => {
+                  setBlackAndWhite(false);
+                  processCapturedImage(capturedImage, { corners, blackAndWhite: false });
+                }}
               >
                 Color
               </button>
@@ -535,22 +613,30 @@ const CameraCapture = ({ onClose, onCapture }) => {
               <button
                 type="button"
                 className={`scan-mode-button ${blackAndWhite ? "active" : ""}`}
-                onClick={() => setBlackAndWhite(true)}
+                onClick={() => {
+                  setBlackAndWhite(true);
+                  processCapturedImage(capturedImage, { corners, blackAndWhite: true });
+                }}
               >
                 B/W
               </button>
             </div>
 
-            <button className="secondary-button" onClick={retake}>
-              Retake
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setStep("corners")}
+            >
+              Adjust Corners
             </button>
 
             <button
+              type="button"
               className="primary-button"
-              onClick={saveDocument}
+              onClick={saveScanned}
               disabled={!scannedImage || loading}
             >
-              Save Document
+              Save
             </button>
           </div>
         </div>

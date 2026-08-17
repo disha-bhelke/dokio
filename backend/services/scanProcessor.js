@@ -12,9 +12,10 @@ const pythonCandidates = process.env.PYTHON_BIN
   ? [{ command: process.env.PYTHON_BIN, prefix: [] }]
   : process.platform === 'win32'
     ? [
-        { command: python311Path, prefix: [] },
-        { command: 'py', prefix: ['-3.11'] },
         { command: 'python', prefix: [] },
+        { command: 'python3', prefix: [] },
+        { command: 'py', prefix: [] },
+        { command: 'py', prefix: ['-3.11'] },
       ]
     : [
         { command: 'python3', prefix: [] },
@@ -49,15 +50,10 @@ const runPythonProcessor = async ({ imagePath, corners, blackAndWhite }) => {
 
       return JSON.parse(output);
     } catch (error) {
-      lastError = error;
-
-      if (error.code === 'ENOENT') {
-        continue;
-      }
-
       const stderr = error.stderr ? String(error.stderr).trim() : '';
       const message = stderr || error.message || 'Python scan processing failed';
-      throw new Error(message);
+      lastError = new Error(message);
+      continue;
     }
   }
 

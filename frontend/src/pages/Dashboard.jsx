@@ -35,6 +35,7 @@ const Dashboard = () => {
   const [tags, setTags] = useState([]);
   const [selectedTag, setSelectedTag] = useState(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [reviewFile, setReviewFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -208,42 +209,35 @@ const Dashboard = () => {
   };
 
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    const tagId = pendingUploadTagId;
-    setPendingUploadTagId('');
+    const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    await uploadFile(file, tagId);
+    setReviewFile(file);
+    setIsCameraOpen(true);
   };
 
   const handleCameraCapture = async (file) => {
     setIsCameraOpen(false);
-    const tagId = pendingCameraTagId;
+    const tagId = pendingCameraTagId || pendingUploadTagId;
     setPendingCameraTagId('');
+    setPendingUploadTagId('');
+    setReviewFile(null);
     await uploadFile(file, tagId);
+  };
+
+  const handleCloseCamera = () => {
+    setIsCameraOpen(false);
+    setPendingCameraTagId('');
+    setPendingUploadTagId('');
+    setReviewFile(null);
   };
 
   const handleCameraFileUpload = async (event) => {
     const file = event.target.files?.[0];
-    const tagId = pendingCameraTagId;
-    setPendingCameraTagId('');
     event.target.value = '';
     if (!file) return;
-
-    setIsPreparingCameraReview(true);
-    try {
-      const { original, scanned } = await prepareReviewFromFile(file);
-      setCameraReviewOriginalFile(file);
-      setCameraReviewTagId(tagId);
-      setCameraReviewOriginalData(original);
-      setCameraReviewScannedData(scanned);
-      setIsCameraReviewOpen(true);
-    } catch (error) {
-      console.error('Failed to prepare camera review:', error);
-      alert('Could not process this photo.');
-    } finally {
-      setIsPreparingCameraReview(false);
-    }
+    setReviewFile(file);
+    setIsCameraOpen(true);
   };
 
   const closeCameraReview = () => {
@@ -561,7 +555,13 @@ const Dashboard = () => {
         </div>
       </main>
 
-      {isCameraOpen && <CameraCapture onClose={() => setIsCameraOpen(false)} onCapture={handleCameraCapture} />}
+      {isCameraOpen && (
+        <CameraCapture
+          initialFile={reviewFile}
+          onClose={handleCloseCamera}
+          onCapture={handleCameraCapture}
+        />
+      )}
 
       {/* Mobile hamburger menu */}
       {isMobileMenuOpen && (

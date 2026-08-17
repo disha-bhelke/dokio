@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 
-MAX_DETECTION_WIDTH = 1200
+MAX_DETECTION_WIDTH = 600
 MIN_DOCUMENT_AREA_RATIO = 0.08
 
 
@@ -28,11 +28,13 @@ def order_points(points):
 
 
 def fallback_corners(width, height):
+    margin_x = float(width * 0.05)
+    margin_y = float(height * 0.05)
     return [
-        {"x": 0, "y": 0},
-        {"x": width, "y": 0},
-        {"x": width, "y": height},
-        {"x": 0, "y": height},
+        {"x": margin_x, "y": margin_y},
+        {"x": float(width - margin_x), "y": margin_y},
+        {"x": float(width - margin_x), "y": float(height - margin_y)},
+        {"x": margin_x, "y": float(height - margin_y)},
     ]
 
 
@@ -54,6 +56,19 @@ def corners_to_points(corners):
     return points
 
 
+def find_quad_from_contour(contour):
+    perimeter = cv2.arcLength(contour, True)
+    for eps_factor in [0.02, 0.04, 0.08]:
+        approx = cv2.approxPolyDP(contour, eps_factor * perimeter, True)
+        if len(approx) == 4:
+            return approx.reshape(4, 2).astype("float32")
+
+    hull = cv2.convexHull(contour)
+    rect = cv2.minAreaRect(hull)
+    box = cv2.boxPoints(rect)
+    return np.array(box, dtype="float32")
+
+
 def detect_corners(image):
     original_height, original_width = image.shape[:2]
 
@@ -72,12 +87,20 @@ def detect_corners(image):
 
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 40, 140)
+
+    edges1 = cv2.Canny(blurred, 30, 120)
     kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.dilate(edges, kernel, iterations=1)
+    edges1 = cv2.dilate(edges1, kernel, iterations=1)
+
+    thresh = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+    )
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    combined_edges = cv2.bitwise_or(edges1, thresh)
 
     contours, _ = cv2.findContours(
-        edges,
+        combined_edges,
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE,
     )
@@ -92,16 +115,14 @@ def detect_corners(image):
         if area < min_area:
             continue
 
-        perimeter = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
-
-        if len(approx) == 4:
-            corners = approx.reshape(4, 2).astype("float32")
+        quad = find_quad_from_contour(contour)
+        if quad is not None:
             if scale != 1.0:
-                corners /= scale
+                quad = quad / scale
             if area > best_area:
                 best_area = area
-                best_quad = corners
+                best_quad = quad
+                break
 
     if best_quad is None:
         return fallback_corners(original_width, original_height)
