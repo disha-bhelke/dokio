@@ -22,6 +22,26 @@ const pythonCandidates = process.env.PYTHON_BIN
         { command: 'python', prefix: [] },
       ];
 
+const fallbackScanProcessing = async ({ imageBuffer, corners = null }) => {
+  const base64 = imageBuffer.toString('base64');
+  const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+  // Default corners if Python is unavailable in cloud host
+  const defaultCorners = [
+    { x: 40, y: 40 },
+    { x: 760, y: 40 },
+    { x: 760, y: 960 },
+    { x: 40, y: 960 },
+  ];
+
+  return {
+    corners: corners || defaultCorners,
+    previewDataUrl: dataUrl,
+    previewWidth: 800,
+    previewHeight: 1000,
+  };
+};
+
 const runPythonProcessor = async ({ imagePath, corners, blackAndWhite }) => {
   const args = [scriptPath, '--image', imagePath];
 
@@ -72,8 +92,11 @@ const processScanImage = async ({ imageBuffer, corners = null, blackAndWhite = f
       corners,
       blackAndWhite,
     });
+  } catch (pythonErr) {
+    console.warn('Python scan processor failed, using fallback:', pythonErr.message);
+    return await fallbackScanProcessing({ imageBuffer, corners });
   } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 };
 
